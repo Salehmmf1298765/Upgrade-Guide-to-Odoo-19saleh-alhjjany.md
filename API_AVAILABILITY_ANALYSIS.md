@@ -1,37 +1,102 @@
-# API Availability Analysis (Tigro Mobile App API Spec vs Odoo 18 Standard + Tigro-Live Customization)
+# Tigro Mobile App API - Availability (Odoo 18) + Estimate
 
-## Scope
+## 1) Summary (Available / Not Available)
 
-This document is based on:
+### Available in Odoo (no business customization)
 
-- `custom_18_part/Tigro-Live/tigro api.csv` (API specification received from the client).
-- A scan of existing customizations under `custom_18_part/Tigro-Live` (as requested).
-- A scan of Odoo standard/enterprise addons under `odoo/addons`.
+- Authentication (session-based) and portal customer access.
+- Customer profile and addresses (`res.partner` + child addresses).
+- Countries/states and (if installed) cities.
+- eCommerce catalog: categories, products, variants, images, SEO fields.
+- Related/upsell/cross-sell products.
+- Cart + checkout flow (website sale order in session).
+- Orders/invoices (portal).
+- Payment providers framework.
+- Shipping fee calculation framework (`delivery` + checkout integration).
+- Coupons/promotions/loyalty framework (`loyalty`, `sale_loyalty`, `website_sale_loyalty`).
+- Wishlist (`website_sale_wishlist`).
+- Helpdesk tickets (portal support) (`helpdesk`).
+- Ratings framework (`rating` + product uses `rating.mixin`).
+- CMS pages and FAQ snippets (website).
 
-`custom_18_part/Tigro_App` was intentionally ignored.
+### Available via existing Tigro-Live customization
 
-## Key findings (evidence-based)
+- MyFatoorah payment integration (payment provider + JSON routes under `/payment/myfatoorah/...`).
+- Gift wrap add-to-cart logic (JSON route `/shop/cart/giftwrap`).
+- Brands: custom model `product.brand`.
+- Extra fields:
+  - `res.partner`: `block`, `floor`, `apartment`.
+  - `product.template`: `tigro_reference_number`.
+  - `sale.order`: `sales_channel`.
 
-- No implementation for the requested `/api/...` endpoints was found in the existing `Tigro-Live` customization.
-  - The only matches for `/api/` inside `Tigro-Live` were in the CSV itself plus unrelated technical logs and vendor JS.
-- `Tigro-Live` contains website/eCommerce related customizations (themes, gift wrap, payment gateway) but they expose different routes than the client’s `/api/...` spec.
-  - Example existing JSON routes:
-    - MyFatoorah: `/payment/myfatoorah/...` (see `custom_18_part/Tigro-Live/myfatoorah_gateway/controllers/main.py`).
-    - Gift wrap: `/shop/cart/giftwrap` (see `custom_18_part/Tigro-Live/odoo_website_giftwrap/controllers/main.py`).
+### Not available (requires new business customization in addition to the API layer)
 
-## How to read the table
+- Guest login concept (dedicated guest session/account endpoint).
+- Refresh token flow (if required by the mobile contract).
+- OTP-based verification/resend.
+- Geographic “areas/zones” model (if required by the app).
+- Flash sale concept.
+- Delivery zones, ETA, delivery slots, live tracking (requires logistics integration).
+- Confirm delivery and return requests (customer self-service flows).
+- Wallet top-up flow.
+- Loyalty tier / referral program.
+- Mobile notifications model/contract (beyond standard messaging).
+- Driver role/app endpoints and driver order workflow.
+- Aggregated analytics endpoints (sales/product/campaign/abandoned cart) as a mobile API contract.
 
-- **Standard Odoo (No Customization)**:
-  - Indicates whether Odoo provides the *underlying feature / business object* (models + standard flows) out-of-the-box.
-  - This does **not** mean Odoo already provides the same REST endpoint.
-- **Exists in Tigro-Live Custom**:
-  - Indicates whether the feature/route is already implemented in `custom_18_part/Tigro-Live`.
-- **Needs New API / Interface Layer**:
-  - For almost all items, a dedicated API layer (new Odoo controllers) is required to expose a stable JSON contract matching the `/api/...` spec.
+## 2) New Odoo addons to be developed (API layer)
 
-Legend: `Yes` / `Partial` / `No`
+| Addon (New) | Scope (Endpoints) | Key Dependencies | Estimate (Hours) |
+|---|---|---|---:|
+| `tigro_mobile_api_core` | API base, response format, error handling, auth/session/token strategy | `web`, `portal` | 60-80 |
+| `tigro_mobile_api_customer` | Profile, preferences, addresses, location | `base`, `portal` | 40-60 |
+| `tigro_mobile_api_catalog` | Categories, brands, products, search, availability | `website_sale`, `stock` | 60-85 |
+| `tigro_mobile_api_shop` | Cart, checkout, orders, invoices, payment methods | `website_sale`, `sale`, `account`, `payment`, `delivery` | 100-140 |
+| `tigro_mobile_api_loyalty` | Coupons, promotions, loyalty, wallet endpoints | `loyalty`, `sale_loyalty`, `website_sale_loyalty` | 70-110 |
+| `tigro_mobile_api_support` | Helpdesk tickets + comments | `helpdesk`, `mail`, `portal` | 35-55 |
+| `tigro_mobile_api_content` | CMS (home/banners/pages/faq) + system config/flags | `website` | 40-65 |
+| `tigro_mobile_api_engagement` | Reviews + notifications endpoints | `rating`, `mail` | 70-110 |
+| `tigro_mobile_api_logistics` | Delivery zones/ETA/slots/live + driver workflow | `delivery`, `stock_delivery` + external integration | 200-320 |
+| `tigro_mobile_api_analytics` | Analytics endpoints (sales/product/campaign/cart) | `sale`, `website_sale` (+ marketing modules if needed) | 60-100 |
 
-## Endpoint availability matrix
+## 3) Effort estimation (Hours)
+
+### Phase 1 (Core Mobile API + eCommerce)
+
+| Workstream | Estimate (Hours) |
+|---|---:|
+| API base + authentication strategy | 60-80 |
+| Customer/profile/addresses/location | 40-60 |
+| Catalog/products/brands/search/availability | 60-85 |
+| Cart/checkout/orders/invoices | 100-140 |
+| Payments integration (incl. MyFatoorah mapping to mobile contract) | 40-70 |
+| Loyalty/promotions/wallet (as per CSV contract) | 70-110 |
+| Wishlist | 16-24 |
+| Reviews | 24-40 |
+| CMS + system config/flags | 40-65 |
+| Support tickets (helpdesk) | 35-55 |
+| QA + test cycles + handover | 50-80 |
+| **Phase 1 Total** | **535-809** |
+
+### Phase 2 (Advanced Logistics + Driver + Analytics)
+
+| Workstream | Estimate (Hours) |
+|---|---:|
+| Delivery zones/ETA/slots/live tracking (integration-dependent) | 80-140 |
+| Driver app endpoints + driver order status workflow | 120-180 |
+| Loyalty tier + referral (if required by app) | 30-60 |
+| Returns + confirm delivery flows | 40-70 |
+| Analytics API endpoints (aggregation + access rules) | 60-100 |
+| QA + performance + security hardening | 40-70 |
+| **Phase 2 Total** | **370-620** |
+
+### Assumptions (for estimation)
+
+- REST endpoints are implemented as Odoo HTTP controllers returning JSON.
+- Access control and record rules are enforced per endpoint.
+- External logistics/live tracking integration is treated as a separate dependency impacting Phase 2.
+
+## 4) Endpoint matrix
 
 | Domain | API Name | Method | Endpoint | Standard Odoo (No Customization) | Exists in Tigro-Live Custom | Needs New API / Interface Layer | Notes / Evidence |
 |---|---|---:|---|---|---|---|---|
@@ -151,32 +216,3 @@ Legend: `Yes` / `Partial` / `No`
 | Analytics | Product performance | GET | `/api/analytics/product` | Yes | No | Yes | Reporting exists; API endpoint is custom. |
 | Analytics | Campaign performance | GET | `/api/analytics/campaign` | Partial | No | Yes | Depends on marketing modules; no dedicated endpoint found. |
 | Analytics | Abandoned cart | GET | `/api/analytics/cart` | Yes | No | Yes | Abandoned cart behavior exists in `website_sale` (tests reference it), but API endpoint is custom. |
-
-## Existing Tigro-Live customization that affects the mobile API requirements
-
-- **MyFatoorah payments**
-  - Implemented as a payment provider + JSON routes.
-  - It can be reused as the payment integration layer, but it does not match the client’s `/api/payments/...` routes.
-
-- **Gift wrap**
-  - Existing custom gift wrap logic exists as a website JSON route.
-  - A mobile-friendly API layer is still required to:
-    - List options, add/remove gifts, and expose card designs (if needed).
-
-- **Brand model**
-  - A custom `product.brand` model exists in `Tigro-Live`.
-  - A `/api/catalog/brands` endpoint can be implemented against that model.
-
-- **Tigro custom fields**
-  - `res.partner`: `block`, `floor`, `apartment` (see `custom_18_part/Tigro-Live/tigro_custom_fields/models/res_partner.py`).
-  - `product.template`: `tigro_reference_number`.
-  - `sale.order`: `sales_channel`.
-
-## Summary
-
-- The CSV describes a full mobile backend API.
-- Odoo standard (plus enterprise modules present in this codebase) provides many underlying business objects (eCommerce, orders, payment, loyalty, helpdesk), but **it does not provide the same `/api/...` contract**.
-- The current `Tigro-Live` codebase does **not** contain an implementation for the requested `/api/...` endpoints.
-- Therefore, the project needs a **new API / interface layer** (custom controllers) that:
-  - Maps the mobile endpoints to Odoo models and existing modules.
-  - Reuses existing Tigro-Live pieces where applicable (MyFatoorah, gift wrap, brands, extra fields).
